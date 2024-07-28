@@ -42,6 +42,7 @@
 
     PROCEDURE update_balance (p_employee_id IN NUMBER,
                               p_balance     IN NUMBER);
+    PROCEDURE not_work_time;
                               
     PROCEDURE add_employee(p_first_name     IN VARCHAR2,
                            p_last_name      IN VARCHAR2,
@@ -53,6 +54,8 @@
                            p_commission_pct IN VARCHAR2 DEFAULT NULL,
                            p_manager_id     IN NUMBER DEFAULT 100,
                            p_department_id  IN NUMBER );
+
+    PROCEDURE fire_an_employee (p_employee_id IN NUMBER);
 
 END util;
 CREATE OR REPLACE PACKAGE body util AS
@@ -370,6 +373,17 @@ CREATE OR REPLACE PACKAGE body util AS
 
     END update_balance;
 
+--Процедура not_work_time--------------------------------------------------------------------
+
+    PROCEDURE not_work_time IS
+
+    BEGIN
+         IF TO_CHAR(sysdate, 'DY', 'NLS_DATE_LANGUAGE = AMERICAN') IN ('SAT', 'SUN') OR sysdate < (trunc(sysdate, 'dd') + 8/24) AND sysdate > (trunc(sysdate, 'dd') + 18/24)
+         THEN
+         raise_application_error(-20001, 'Ви можете вносити зміни лише в робочий час');
+         END IF;
+    END not_work_time;
+
 --Процедура add_employee---------------------------------------------------------------------
 
     PROCEDURE add_employee( p_first_name     IN VARCHAR2,
@@ -427,10 +441,7 @@ CREATE OR REPLACE PACKAGE body util AS
         raise_application_error(-20001,'Введено неприпустиму заробітну плату для даного коду посади');
         END IF;
 
-        IF TO_CHAR(SYSDATE, 'DY', 'NLS_DATE_LANGUAGE = AMERICAN') IN ('SAT', 'SUN') OR sysdate < (trunc(sysdate, 'dd') + 8/24) OR sysdate > (trunc(sysdate, 'dd') + 18/24)
-          THEN
-            raise_application_error(-20001,'Ви можете додавати нового співробітника лише в робочий час');
-        END IF;
+        not_work_time; --замінила кусок коду на процедуру
 
           <<insert_empl>>
            BEGIN
@@ -454,6 +465,66 @@ CREATE OR REPLACE PACKAGE body util AS
       log_util.log_finish(p_proc_name => 'add_employee');
 
     END add_employee;
------------------------------------------------------------------------------------------------------
+
+--Процедура fire_an_employee-------------------------------------------------------------------------
+
+PROCEDURE fire_an_employee (p_employee_id IN NUMBER) IS
+     
+    v_is_exist_employee_id NUMBER;
+    v_first_name VARCHAR2(50);
+    v_last_name VARCHAR2(50);
+    v_email varchar2(25); 
+    v_phone_number varchar2(20); 
+    v_hire_date date; 
+    v_job_id varchar2(10);
+    v_salary number(8,2); 
+    v_commission_pct number(2,2); 
+    v_manager_id number(6); 
+    v_department_id number(4); 
+    
+    BEGIN
+      
+        log_util.log_start (p_proc_name => 'fire_an_employee');
+    
+        SELECT COUNT(*)
+        INTO v_is_exist_employee_id
+        FROM employees em
+        WHERE em.employee_id = p_employee_id;
+        
+        IF v_is_exist_employee_id=0 THEN
+        raise_application_error(-20001,'Переданий співробітник не існує');
+        END IF;
+             
+        not_work_time;
+        
+        SELECT em.first_name, em.last_name, em.email, em.phone_number, em.hire_date, em.job_id, em.salary, em.commission_pct, em.manager_id, em.department_id
+        INTO v_first_name, v_last_name, v_email, v_phone_number, v_hire_date, v_job_id, v_salary, v_commission_pct, v_manager_id, v_department_id
+        FROM employees em
+        WHERE em.employee_id = p_employee_id;
+        
+          <<fire_empl>>
+           BEGIN
+               DELETE FROM employees em
+               WHERE em.employee_id=p_employee_id;
+               
+               INSERT INTO employees_history(employee_id, first_name, last_name, email, phone_number, hire_date, job_id, salary, commission_pct, manager_id, department_id, fire_date) 
+               VALUES (p_employee_id, v_first_name, v_last_name, v_email, v_phone_number, v_hire_date, v_job_id, v_salary, v_commission_pct, v_manager_id, v_department_id, sysdate);
+                        
+               COMMIT;
+               
+               dbms_output.put_line('Співробітник ' || v_first_name || ' ' || v_last_name || ', КОД ПОСАДИ = ' || v_job_id || ', ІД ДЕПАРТАМЕНТУ = ' || v_department_id || ' успішно звільнений');
+               
+               EXCEPTION
+               WHEN OTHERS THEN
+               log_util.log_error(p_proc_name => 'fire_an_employee',
+                                  p_sqlerrm   => SQLERRM);  
+               dbms_output.put_line('Співробітника не видалено: непередбачувана помилка ' ||SQLERRM); 
+                         
+           END fire_empl; 
+           
+      log_util.log_finish(p_proc_name => 'fire_an_employee');
+        
+    END fire_an_employee;
+-------------------------------------------------------------------------------------------------
                              
 END util;
