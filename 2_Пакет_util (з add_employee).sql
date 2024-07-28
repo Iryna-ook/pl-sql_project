@@ -57,6 +57,17 @@
 
     PROCEDURE fire_an_employee (p_employee_id IN NUMBER);
 
+    PROCEDURE change_attribute_employee (p_employee_id    IN NUMBER,
+                                         p_first_name     IN VARCHAR2 DEFAULT NULL,
+                                         p_last_name      IN VARCHAR2 DEFAULT NULL,
+                                         p_email          IN VARCHAR2 DEFAULT NULL,
+                                         p_phone_number   IN VARCHAR2 DEFAULT NULL,
+                                         p_job_id         IN VARCHAR2 DEFAULT NULL,
+                                         p_salary         IN NUMBER   DEFAULT NULL,
+                                         p_commission_pct IN NUMBER   DEFAULT NULL,
+                                         p_manager_id     IN NUMBER   DEFAULT NULL,
+                                         p_department_id  IN NUMBER   DEFAULT NULL);
+
 END util;
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
@@ -529,6 +540,94 @@ PROCEDURE fire_an_employee (p_employee_id IN NUMBER) IS
       log_util.log_finish(p_proc_name => 'fire_an_employee');
         
     END fire_an_employee;
--------------------------------------------------------------------------------------------------
+
+--Процедура change_attribute_employee------------------------------------------------------
+
+   PROCEDURE change_attribute_employee (p_employee_id    IN NUMBER,
+                                        p_first_name     IN VARCHAR2 DEFAULT NULL,
+                                        p_last_name      IN VARCHAR2 DEFAULT NULL,
+                                        p_email          IN VARCHAR2 DEFAULT NULL,
+                                        p_phone_number   IN VARCHAR2 DEFAULT NULL,
+                                        p_job_id         IN VARCHAR2 DEFAULT NULL,
+                                        p_salary         IN NUMBER   DEFAULT NULL,
+                                        p_commission_pct IN NUMBER   DEFAULT NULL,
+                                        p_manager_id     IN NUMBER   DEFAULT NULL,
+                                        p_department_id  IN NUMBER   DEFAULT NULL) IS
+   v_is_exist_employee_id NUMBER;                                 
+   v_first_name     VARCHAR2(20);
+   v_last_name      VARCHAR2(25);
+   v_email          VARCHAR2(25);
+   v_phone_number   VARCHAR2(20);
+   v_job_id         VARCHAR2(10);
+   v_salary         NUMBER(8,2);  
+   v_commission_pct NUMBER(2,2); 
+   v_manager_id     NUMBER (6);   
+   v_department_id  NUMBER (4);    
+        
+    BEGIN
+      
+        log_util.log_start (p_proc_name => 'change_attribute_employee');
+        
+        SELECT COUNT(*)
+        INTO v_is_exist_employee_id
+        FROM employees em
+        WHERE em.employee_id = p_employee_id;
+        
+        IF v_is_exist_employee_id=0 THEN
+        log_util.log_finish(p_proc_name => 'change_attribute_employee', p_text => 'Завершення логування процесу change_attribute_employee: атрибути не оновлено');
+        raise_application_error(-20001,'Переданий співробітник не існує');
+        END IF;       
+        
+        IF p_first_name IS NOT NULL 
+            OR p_last_name IS NOT NULL 
+            OR p_email IS NOT NULL 
+            OR p_phone_number IS NOT NULL 
+            OR p_job_id IS NOT NULL 
+            OR p_salary IS NOT NULL 
+            OR p_commission_pct IS NOT NULL 
+            OR p_manager_id IS NOT NULL 
+            OR p_department_id IS NOT NULL 
+            
+        THEN
+        
+        SELECT em.first_name, em.last_name, em.email, em.phone_number, em.job_id, em.salary, em.commission_pct, em.manager_id, em.department_id
+        INTO   v_first_name,  v_last_name,  v_email,  v_phone_number,  v_job_id,  v_salary,  v_commission_pct,  v_manager_id,  v_department_id
+        FROM employees em
+        WHERE em.employee_id = p_employee_id;      
+              
+         <<update_empl>>
+        BEGIN
+        
+            UPDATE employees
+            SET first_name = NVL(p_first_name, v_first_name), 
+                last_name = NVL(p_last_name, v_last_name), 
+                email = NVL(p_email, v_email), 
+                phone_number = NVL(p_phone_number, v_phone_number), 
+                job_id = NVL(p_job_id, v_job_id), 
+                salary = NVL(p_salary, v_salary), 
+                commission_pct = NVL(p_commission_pct, v_commission_pct), 
+                manager_id = NVL(p_manager_id, v_manager_id), 
+                department_id = NVL(p_department_id, v_department_id)
+            WHERE employee_id = p_employee_id;
+            COMMIT;
+            dbms_output.put_line('У співробітника ' || p_employee_id || ' успішно оновлені атрибути');
+            log_util.log_finish(p_proc_name => 'change_attribute_employee', p_text => 'Завершення логування процесу change_attribute_employee: атрибути оновлено');
+            
+            EXCEPTION
+               WHEN OTHERS THEN
+               log_util.log_error(p_proc_name => 'change_attribute_employee',
+                                  p_sqlerrm   => SQLERRM);  
+               dbms_output.put_line('Атрибути не оновлено: непередбачувана помилка ' ||SQLERRM);
+               
+        END update_empl;  
+        
+        ELSE
+            log_util.log_finish(p_proc_name => 'change_attribute_employee', p_text => 'Завершення логування процесу change_attribute_employee: атрибути не змінено, не вказано дані для оновлення');
+            raise_application_error(-20001,'Не вказано дані для оновлення');
+        END IF;  
+        
+    END change_attribute_employee;
+    
+------------------------------------------------------------------------------------------------------------  
                              
 END util;
