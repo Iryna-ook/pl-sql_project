@@ -393,7 +393,7 @@ CREATE OR REPLACE PACKAGE body util AS
     PROCEDURE not_work_time IS
 
     BEGIN
-         IF TO_CHAR(sysdate, 'DY', 'NLS_DATE_LANGUAGE = AMERICAN') IN ('SAT', 'SUN') OR sysdate < (trunc(sysdate, 'dd') + 8/24) AND sysdate > (trunc(sysdate, 'dd') + 18/24)
+         IF TO_CHAR(sysdate, 'DY', 'NLS_DATE_LANGUAGE = AMERICAN') IN ('SAT', 'SUN') OR sysdate < (trunc(sysdate, 'dd') + 8/24) OR sysdate > (trunc(sysdate, 'dd') + 18/24)
          THEN
          raise_application_error(-20001, 'Ви можете вносити зміни лише в робочий час');
          END IF;
@@ -428,6 +428,8 @@ CREATE OR REPLACE PACKAGE body util AS
     BEGIN
 
         log_util.log_start (p_proc_name => 'add_employee');
+
+        not_work_time; --замінила кусок коду на процедуру
         
         SELECT COUNT(*)
         INTO v_is_exist_job_id
@@ -456,8 +458,6 @@ CREATE OR REPLACE PACKAGE body util AS
         raise_application_error(-20001,'Введено неприпустиму заробітну плату для даного коду посади');
         END IF;
 
-        not_work_time; --замінила кусок коду на процедуру
-
           <<insert_empl>>
            BEGIN
              v_employee_id := get_max_employee_id();
@@ -485,7 +485,6 @@ CREATE OR REPLACE PACKAGE body util AS
 
 PROCEDURE fire_an_employee (p_employee_id IN NUMBER) IS
      
-    v_is_exist_employee_id NUMBER;
     v_first_name VARCHAR2(50);
     v_last_name VARCHAR2(50);
     v_email varchar2(25); 
@@ -501,21 +500,20 @@ PROCEDURE fire_an_employee (p_employee_id IN NUMBER) IS
       
         log_util.log_start (p_proc_name => 'fire_an_employee');
     
-        SELECT COUNT(*)
-        INTO v_is_exist_employee_id
-        FROM employees em
-        WHERE em.employee_id = p_employee_id;
-        
-        IF v_is_exist_employee_id=0 THEN
-        raise_application_error(-20001,'Переданий співробітник не існує');
-        END IF;
-             
         not_work_time;
+                
+        BEGIN
         
-        SELECT em.first_name, em.last_name, em.email, em.phone_number, em.hire_date, em.job_id, em.salary, em.commission_pct, em.manager_id, em.department_id
-        INTO v_first_name, v_last_name, v_email, v_phone_number, v_hire_date, v_job_id, v_salary, v_commission_pct, v_manager_id, v_department_id
-        FROM employees em
-        WHERE em.employee_id = p_employee_id;
+            SELECT em.first_name, em.last_name, em.email, em.phone_number, em.hire_date, em.job_id, em.salary, em.commission_pct, em.manager_id, em.department_id
+            INTO v_first_name, v_last_name, v_email, v_phone_number, v_hire_date, v_job_id, v_salary, v_commission_pct, v_manager_id, v_department_id
+            FROM employees em
+            WHERE em.employee_id = p_employee_id;
+            
+            EXCEPTION
+            WHEN no_data_found THEN
+            raise_application_error(-20001,'Переданий співробітник не існує');
+        
+        END;
         
           <<fire_empl>>
            BEGIN
@@ -552,8 +550,7 @@ PROCEDURE fire_an_employee (p_employee_id IN NUMBER) IS
                                         p_salary         IN NUMBER   DEFAULT NULL,
                                         p_commission_pct IN NUMBER   DEFAULT NULL,
                                         p_manager_id     IN NUMBER   DEFAULT NULL,
-                                        p_department_id  IN NUMBER   DEFAULT NULL) IS
-   v_is_exist_employee_id NUMBER;                                 
+                                        p_department_id  IN NUMBER   DEFAULT NULL) IS                          
    v_first_name     VARCHAR2(20);
    v_last_name      VARCHAR2(25);
    v_email          VARCHAR2(25);
@@ -567,16 +564,22 @@ PROCEDURE fire_an_employee (p_employee_id IN NUMBER) IS
     BEGIN
       
         log_util.log_start (p_proc_name => 'change_attribute_employee');
+
+        not_work_time;
         
-        SELECT COUNT(*)
-        INTO v_is_exist_employee_id
-        FROM employees em
-        WHERE em.employee_id = p_employee_id;
-        
-        IF v_is_exist_employee_id=0 THEN
-        log_util.log_finish(p_proc_name => 'change_attribute_employee', p_text => 'Завершення логування процесу change_attribute_employee: атрибути не оновлено');
-        raise_application_error(-20001,'Переданий співробітник не існує');
-        END IF;       
+        BEGIN 
+            
+            SELECT em.first_name, em.last_name, em.email, em.phone_number, em.job_id, em.salary, em.commission_pct, em.manager_id, em.department_id
+            INTO   v_first_name,  v_last_name,  v_email,  v_phone_number,  v_job_id,  v_salary,  v_commission_pct,  v_manager_id,  v_department_id
+            FROM employees em
+            WHERE em.employee_id = p_employee_id; 
+            
+            EXCEPTION
+            WHEN no_data_found THEN
+            log_util.log_finish(p_proc_name => 'change_attribute_employee', p_text => 'Завершення логування процесу change_attribute_employee: атрибути не оновлено');
+            raise_application_error(-20001,'Переданий співробітник не існує');    
+
+        END;     
         
         IF p_first_name IS NOT NULL 
             OR p_last_name IS NOT NULL 
@@ -588,16 +591,10 @@ PROCEDURE fire_an_employee (p_employee_id IN NUMBER) IS
             OR p_manager_id IS NOT NULL 
             OR p_department_id IS NOT NULL 
             
-        THEN
-        
-        SELECT em.first_name, em.last_name, em.email, em.phone_number, em.job_id, em.salary, em.commission_pct, em.manager_id, em.department_id
-        INTO   v_first_name,  v_last_name,  v_email,  v_phone_number,  v_job_id,  v_salary,  v_commission_pct,  v_manager_id,  v_department_id
-        FROM employees em
-        WHERE em.employee_id = p_employee_id;      
-              
+        THEN            
          <<update_empl>>
         BEGIN
-        
+            
             UPDATE employees
             SET first_name = NVL(p_first_name, v_first_name), 
                 last_name = NVL(p_last_name, v_last_name), 
@@ -609,7 +606,9 @@ PROCEDURE fire_an_employee (p_employee_id IN NUMBER) IS
                 manager_id = NVL(p_manager_id, v_manager_id), 
                 department_id = NVL(p_department_id, v_department_id)
             WHERE employee_id = p_employee_id;
+
             COMMIT;
+
             dbms_output.put_line('У співробітника ' || p_employee_id || ' успішно оновлені атрибути');
             log_util.log_finish(p_proc_name => 'change_attribute_employee', p_text => 'Завершення логування процесу change_attribute_employee: атрибути оновлено');
             
