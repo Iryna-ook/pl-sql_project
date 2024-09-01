@@ -74,6 +74,8 @@
                           p_copy_data     IN  BOOLEAN  DEFAULT FALSE,
                           po_result       OUT VARCHAR2);
 
+    PROCEDURE api_nbu_sync;
+
 END util;
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
@@ -707,5 +709,49 @@ PROCEDURE copy_table (p_source_scheme IN VARCHAR2,
      po_result:= 'Процес копіювання таблиць '||p_list_table||' зі схеми '||p_source_scheme||' до схеми '||p_target_scheme||' завершено. Журнал подій записано в таблицю логування.' ;
           
      END copy_table;
--------------------------------------------------------------------------------------------- 
+
+--Процедура api_nbu_sync----------------------------------------------------------------------------------------------
+
+    PROCEDURE api_nbu_sync IS
+
+       v_list_currencies VARCHAR2(500);
+       
+    BEGIN
+       log_util.log_start(p_proc_name => 'api_nbu_sync');
+       
+       <<list_currencies>>
+       BEGIN
+          SELECT s.value_text
+          INTO v_list_currencies
+          FROM sys_params s
+          WHERE s.param_name = 'list_currencies';
+          
+          EXCEPTION
+          WHEN OTHERS THEN
+          log_util.log_error(p_proc_name => 'api_nbu_sync',
+                             p_sqlerrm   => sqlerrm);
+          raise_application_error (-20001,'Невідома помилка. '|| SQLERRM) ;
+       END list_currencies;
+       
+       <<insert_val>>
+       BEGIN
+         FOR cc IN
+         (SELECT value_list AS curr FROM TABLE(util.table_from_list(p_list_val => v_list_currencies)))
+         LOOP
+         INSERT INTO cur_exchange SELECT gc.*, SYSDATE FROM TABLE(util.get_currency(p_currency => cc.curr))gc;
+         COMMIT;
+         END LOOP;
+         
+         EXCEPTION
+         WHEN OTHERS THEN
+         log_util.log_error(p_proc_name => 'api_nbu_sync',
+                            p_sqlerrm   => sqlerrm);
+         raise_application_error (-20002,'Невідома помилка. '|| SQLERRM) ;
+       
+       END insert_val;
+       
+       log_util.log_finish(p_proc_name => 'api_nbu_sync');
+       
+    END api_nbu_sync;
+------------------------------------------------------------------------------------------------------------------------        
 END util;
