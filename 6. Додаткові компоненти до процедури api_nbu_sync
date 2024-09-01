@@ -1,0 +1,29 @@
+-- Створення таблиці sys_params ----------------------------------------------------------------------------------------------------
+
+CREATE TABLE sys_params (param_name   VARCHAR2(150),
+                         value_date   DATE,
+                         value_text   VARCHAR2(2000),
+                         value_number NUMBER,
+                         param_descr  VARCHAR2(200));
+
+-- Внесення даних в таблицю sys_params ---------------------------------------------------------------------------------------------  
+
+INSERT INTO sys_params (param_name, value_date, value_text, value_number, param_descr)
+VALUES ('list_currencies', sysdate, 'USD,EUR,KZT,AMD,GBP,ILS', 1, 'Список валют для синхронізації в процедурі util.api_nbu_sync');
+
+COMMIT;
+
+-- Створення шедулера update_api_nbu_sync ------------------------------------------------------------------------------------------
+BEGIN
+    sys.dbms_scheduler.create_job(job_name => 'update_api_nbu_sync',
+                                    job_type => 'PLSQL_BLOCK',
+                                    job_action => 'begin util.api_nbu_sync(); end;',
+                                    start_date => SYSDATE,
+                                    repeat_interval => 'FREQ=DAILY;BYHOUR=6;BYMINUTE=0',
+                                    end_date => TO_DATE(NULL),
+                                    job_class => 'DEFAULT_JOB_CLASS' ,
+                                    enabled => TRUE,
+                                    auto_drop => FALSE,
+                                    comments => 'Оновлення даних у таблиці cur_exchange');
+END;
+/
